@@ -100,6 +100,7 @@ body {
   gap: 10px;
   min-width: 148px;
   padding: 10px 14px 10px 10px;
+  position: relative;
   text-decoration: none;
   color: var(--ink);
   background: linear-gradient(165deg, #221c16, #15120f);
@@ -143,6 +144,28 @@ body {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* 窑剪影角标：该窑班次总数 */
+.kiln-count {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ember-deep);
+  color: #fff7ed;
+  border: 1px solid rgba(255, 237, 213, 0.35);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.kiln-chip.is-active .kiln-count { background: var(--ember); }
 
 .timeline-head {
   display: flex;
@@ -286,6 +309,69 @@ body {
   color: var(--muted);
   border: 1px dashed var(--line);
   border-radius: 12px;
+}
+
+/* —— 自然日折叠 —— */
+.day-group { margin-bottom: 14px; }
+
+.day-group details { margin: 0; }
+
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.day-head::-webkit-details-marker { display: none; }
+
+.day-head::before {
+  content: "▾";
+  color: var(--ember);
+  font-size: 0.8rem;
+  transition: transform 0.15s;
+}
+
+.day-group details:not([open]) > .day-head::before { transform: rotate(-90deg); }
+
+.day-date {
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-count {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--char);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-head:hover .day-count { border-color: var(--ember); color: var(--ink); }
+
+/* —— 页脚对账 —— */
+.board-foot {
+  margin-top: 8px;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.board-foot strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .badge {

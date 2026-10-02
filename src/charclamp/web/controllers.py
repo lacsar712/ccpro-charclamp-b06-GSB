@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from litestar import Controller, MediaType, Request, get, post
 from litestar.enums import RequestEncodingType
 from litestar.params import Body
 from litestar.response import Redirect, Template
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from charclamp.domain.models import BurnShift, Clamp, User
@@ -47,23 +47,50 @@ def _parse_optional_int(raw: str | None) -> int | None:
         return None
 
 
+def _group_shifts_by_day(shifts: list[BurnShift]) -> list[dict[str, Any]]:
+    """把按开始时间倒序的班次折叠成自然日分组。
+
+    只折叠当前筛选下可见的班次；每组携带当日条数，与卡片一一对应。
+    """
+    day_groups: list[dict[str, Any]] = []
+    for shift in shifts:
+        day: date = shift.started_at.date()
+        if day_groups and day_groups[-1]["day"] == day:
+            day_groups[-1]["shifts"].append(shift)
+        else:
+            day_groups.append({"day": day, "shifts": [shift]})
+    return day_groups
+
+
 async def _load_timeline_context(clamp_id: int | None = None) -> dict[str, Any]:
     async with SessionLocal() as db:
         clamps = list(
             (
                 await db.execute(
                     select(Clamp)
-                    .options(selectinload(Clamp.site), selectinload(Clamp.shifts))
+                    .options(selectinload(Clamp.site))
                     .order_by(Clamp.code)
                 )
             )
             .scalars()
             .all()
         )
+        # 角标：每窑班次全量，直接对库 GROUP BY，不受当前筛选影响。
+        count_rows = (
+            await db.execute(
+                select(BurnShift.clamp_id, func.count())
+                .group_by(BurnShift.clamp_id)
+            )
+        ).all()
+        shift_counts = {row_clamp_id: cnt for row_clamp_id, cnt in count_rows}
+        # 页脚：全库班次总数。
+        total_shifts = (
+            await db.execute(select(func.count()).select_from(BurnShift))
+        ).scalar_one()
         query = (
             select(BurnShift)
             .options(selectinload(BurnShift.clamp).selectinload(Clamp.site))
-            .order_by(BurnShift.started_at.desc())
+            .order_by(BurnShift.started_at.desc(), BurnShift.id.desc())
         )
         if clamp_id is not None:
             query = query.where(BurnShift.clamp_id == clamp_id)
@@ -72,6 +99,9 @@ async def _load_timeline_context(clamp_id: int | None = None) -> dict[str, Any]:
     return {
         "clamps": clamps,
         "shifts": shifts,
+        "day_groups": _group_shifts_by_day(shifts),
+        "shift_counts": shift_counts,
+        "total_shifts": total_shifts,
         "active_clamp_id": clamp_id,
         "status_labels": STATUS_LABELS,
         "site_name": site_name,

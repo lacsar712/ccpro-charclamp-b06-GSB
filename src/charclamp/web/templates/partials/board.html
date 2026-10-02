@@ -14,6 +14,7 @@
       <strong>全部窑</strong>
       <em>时间轴总览</em>
     </span>
+    <span class="kiln-count" title="全库班次总数">{{ total_shifts }}</span>
   </a>
   {% for clamp in clamps %}
   <a
@@ -37,6 +38,7 @@
       <strong>{{ clamp.code }}</strong>
       <em>{{ status_labels.get(clamp.status, clamp.status) }} · {{ clamp.wood_species or '—' }}</em>
     </span>
+    <span class="kiln-count" title="{{ clamp.code }} 班次总数">{{ shift_counts.get(clamp.id, 0) }}</span>
   </a>
   {% endfor %}
 </section>
@@ -58,3 +60,7 @@
 </header>
 
 {% include "partials/timeline_feed.html" %}
+
+<footer class="board-foot" aria-label="台账对账">
+  <span>全库班次总数 <strong id="total-shifts">{{ total_shifts }}</strong> 条</span>
+</footer>
