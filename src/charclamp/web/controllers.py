@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from litestar import Controller, MediaType, Request, get, post
 from litestar.enums import RequestEncodingType
 from litestar.params import Body
 from litestar.response import Redirect, Template
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from charclamp.domain.models import BurnShift, Clamp, User
@@ -20,6 +20,8 @@ STATUS_LABELS = {
     Clamp.STATUS_BURNING: "焖烧中",
     Clamp.STATUS_DRAWN: "已出炭",
 }
+
+WEEKDAY_LABELS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
 def _set_flash(request: Request, message: str, category: str = "ok") -> None:
@@ -47,6 +49,13 @@ def _parse_optional_int(raw: str | None) -> int | None:
         return None
 
 
+def _local_dt(value: datetime) -> datetime:
+    """把班次时间归一到本地时区，用于按自然日折叠。"""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone()
+
+
 async def _load_timeline_context(clamp_id: int | None = None) -> dict[str, Any]:
     async with SessionLocal() as db:
         clamps = list(
@@ -68,10 +77,51 @@ async def _load_timeline_context(clamp_id: int | None = None) -> dict[str, Any]:
         if clamp_id is not None:
             query = query.where(BurnShift.clamp_id == clamp_id)
         shifts = list((await db.execute(query)).scalars().all())
+
+        # 窑剪影角标：每座窑的「全量」班次数，刻意不带时间轴筛选。
+        counts_rows = (
+            await db.execute(
+                select(BurnShift.clamp_id, func.count(BurnShift.id))
+                .group_by(BurnShift.clamp_id)
+            )
+        ).all()
+        shift_counts = {clamp_id_: count for clamp_id_, count in counts_rows}
+
+        # 页脚：全库班次总数，同样不随筛选变化。
+        total_shifts = (
+            await db.execute(select(func.count(BurnShift.id)).select_from(BurnShift))
+        ).scalar_one()
+
         site_name = clamps[0].site.name if clamps else "乌石岗焖烧坞"
+
+    # 时间轴按自然日折叠：只对当前可见（可能已按窑筛选）的班次分组，
+    # 因此折叠条数 == 可见卡片数；角标与页脚仍是全量。
+    today = _local_dt(datetime.now(timezone.utc)).date()
+    day_groups: list[dict[str, Any]] = []
+    day_index: dict[Any, int] = {}
+    for shift in shifts:
+        day = _local_dt(shift.started_at).date()
+        if day not in day_index:
+            day_index[day] = len(day_groups)
+            day_groups.append(
+                {
+                    "date": day,
+                    "label": f"{day.year}年{day.month:02d}月{day.day:02d}日",
+                    "weekday": WEEKDAY_LABELS[day.weekday()],
+                    "is_today": day == today,
+                    "shifts": [],
+                }
+            )
+        day_groups[day_index[day]]["shifts"].append(shift)
+    for group in day_groups:
+        group["count"] = len(group["shifts"])
+
     return {
         "clamps": clamps,
         "shifts": shifts,
+        "day_groups": day_groups,
+        "shift_counts": shift_counts,
+        "total_shifts": total_shifts,
         "active_clamp_id": clamp_id,
         "status_labels": STATUS_LABELS,
         "site_name": site_name,

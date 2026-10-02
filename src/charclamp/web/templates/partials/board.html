@@ -37,6 +37,7 @@
       <strong>{{ clamp.code }}</strong>
       <em>{{ status_labels.get(clamp.status, clamp.status) }} · {{ clamp.wood_species or '—' }}</em>
     </span>
+    <span class="kiln-count" title="该窑全部焖烧班次数">{{ shift_counts.get(clamp.id, 0) }}</span>
   </a>
   {% endfor %}
 </section>
@@ -58,3 +59,7 @@
 </header>
 
 {% include "partials/timeline_feed.html" %}
+
+<footer class="board-footer">
+  全库焖烧班次总数：<strong data-total-shifts>{{ total_shifts }}</strong> 班
+</footer>
